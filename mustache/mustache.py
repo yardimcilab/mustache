@@ -12,7 +12,7 @@ from collections import defaultdict
 import pandas as pd
 import numpy as np
 import hicstraw
-import cooler
+#import cooler
 
 from scipy.stats import expon
 from scipy.ndimage import gaussian_filter
@@ -92,10 +92,18 @@ def parse_args(args):
         dest="chrSize_file",
         help="RECOMMENDED: .hic corressponfing chromosome size file.",
         required=False)
+    # December 27, 2023: Introduced additional parameter to select between "observed" and "oe" maps.
+    parser.add_argument(
+        "-obs",
+        "--observation",
+        default="observed",
+        dest="obs_type",
+        help="RECOMMENDED: Hi-C  observation type (observed, oe,...).",
+        required=False)
     parser.add_argument(
         "-norm",
         "--normalization",
-        default=False,
+        default="KR",
         dest="norm_method",
         help="RECOMMENDED: Hi-C  normalization method (KR, VC,...).",
         required=False)
@@ -297,7 +305,7 @@ def read_pd(f, distance_in_bp, bias, chromosome, res):
     return x, y, val
 
 
-def read_hic_file(f, norm_method, CHRM_SIZE, distance_in_bp, chr1, chr2, res):
+def read_hic_file(f, norm_method, obs_type, CHRM_SIZE, distance_in_bp, chr1, chr2, res):
     """
     :param f: .hic file path
     :param chr: Which chromosome to read the file for
@@ -320,13 +328,24 @@ def read_hic_file(f, norm_method, CHRM_SIZE, distance_in_bp, chr1, chr2, res):
 
     while start < CHRM_SIZE:
         print(int(start), int(end))
-        if not norm_method:
+        # December 27, 2023: Rather than norm_method being set by default to a particular method, it was originally set to False.
+        # I changed this with the original code commented out here:
+
+        """ if not norm_method:
             temp = hicstraw.straw("observed", "KR", f, str(chr1) + ":" + str(int(start)) + ":" + str(int(end)),
                                   str(chr2) + ":" + str(int(start)) + ":" + str(int(end)), "BP", res)
         else:
             temp = hicstraw.straw("observed", str(norm_method), f,
                                   str(chr1) + ":" + str(int(start)) + ":" + str(int(end)),
+                                  str(chr2) + ":" + str(int(start)) + ":" + str(int(end)), "BP", res) """
+        
+        # This is the new code. Default for --normalization is now set during parser.add_argument.
+        # We also make use of the obs_type parameter (observed or oe)
+        temp = hicstraw.straw(str(obs_type), str(norm_method), f,
+                                  str(chr1) + ":" + str(int(start)) + ":" + str(int(end)),
                                   str(chr2) + ":" + str(int(start)) + ":" + str(int(end)), "BP", res)
+        
+        # Original code resumes
         if len(temp) == 0:
             start = min(start + CHUNK_SIZE * res - distance_in_bp, CHRM_SIZE)
             if end == CHRM_SIZE - 1:
@@ -778,7 +797,7 @@ def mustache(c, chromosome, chromosome2, res, pval_weights, start, end, mask_siz
     #################
     o = np.ones_like(c)
     o[nz] = pAll
-    sig_count = np.sum(o < pt)  # change
+    sig_count = np.sum(o < pt)  # change?
     x, y = np.unravel_index(np.argsort(o.ravel()), o.shape)
     so = np.ones_like(c)
     so[nz] = Scales
@@ -840,7 +859,7 @@ def mustache(c, chromosome, chromosome2, res, pval_weights, start, end, mask_siz
     return out
 
 
-def regulator(f, norm_method, CHRM_SIZE, outdir, bed="",
+def regulator(f, norm_method, obs_type, CHRM_SIZE, outdir, bed="",
               res=5000,
               sigma0=1.6,
               s=10,
@@ -867,7 +886,7 @@ def regulator(f, norm_method, CHRM_SIZE, outdir, bed="",
     print("Reading contact map...")
 
     if f.endswith(".hic"):
-        x, y, v = read_hic_file(f, norm_method, CHRM_SIZE, distance_in_bp, chromosome, chromosome2, res)
+        x, y, v = read_hic_file(f, norm_method, obs_type, CHRM_SIZE, distance_in_bp, chromosome, chromosome2, res)
     elif f.endswith(".cool"):
         x, y, v, res = read_cooler(f, distance_in_bp, chromosome, chromosome2, norm_method)
     elif f.endswith(".mcool"):
@@ -1054,7 +1073,7 @@ def main():
             else:
                 print("Error: Couldn't find specified bias file")
                 return
-        o = regulator(f, args.norm_method, CHRM_SIZE, args.outdir,
+        o = regulator(f, args.norm_method, args.obs_type, CHRM_SIZE, args.outdir,
                       bed=args.bed,
                       res=res,
                       sigma0=args.s_z,

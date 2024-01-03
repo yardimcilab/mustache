@@ -12,7 +12,7 @@ from collections import defaultdict
 import pandas as pd
 import numpy as np
 import hicstraw
-import cooler
+#import cooler
 from mustache import kth_diag_indices, parseBP, read_bias, read_pd, read_hic_file, read_cooler, read_mcooler, get_diags, normalize_sparse, get_sep
 
 from scipy.stats import expon, norm
@@ -87,10 +87,18 @@ def parse_args(args):
         dest="chrSize_file",
         help="RECOMMENDED: .hic corressponfing chromosome size file.",
         required=False)
+    # December 27, 2023: Introduced additional parameter to select between "observed" and "oe" maps.
+    parser.add_argument(
+        "-obs",
+        "--observation",
+        default="observed",
+        dest="obs_type",
+        help="RECOMMENDED: Hi-C  observation type (observed, oe,...).",
+        required=False)
     parser.add_argument(
         "-norm",
         "--normalization",
-        default=False,
+        default="KR",
         dest="norm_method",
         help="RECOMMENDED: Hi-C  normalization method (KR, VC,...).",
         required=False)
@@ -569,7 +577,7 @@ def diff_mustache(c1, c2, chromosome,chromosome2, res, start, end, mask_size, di
     return out1, diff_out1, out2, diff_out2
 
 
-def regulator(f1, f2, norm_method, CHRM_SIZE, outdir, bed1="", bed2="",
+def regulator(f1, f2, norm_method, obs_type, CHRM_SIZE, outdir, bed1="", bed2="",
               res=5000,
               sigma0=1.6,
               s=10,
@@ -600,7 +608,7 @@ def regulator(f1, f2, norm_method, CHRM_SIZE, outdir, bed1="", bed2="",
     print("Reading contact map...")
 
     if f1.endswith(".hic"):                       
-        x1, y1, v1 = read_hic_file(f1, norm_method, CHRM_SIZE, distance_in_bp, chromosome,chromosome2, res)
+        x1, y1, v1 = read_hic_file(f1, norm_method, obs_type, CHRM_SIZE, distance_in_bp, chromosome,chromosome2, res)
     elif f1.endswith(".cool"):
         x1, y1, v1, res = read_cooler(f1, distance_in_bp, chromosome,chromosome2, norm_method)
     elif f1.endswith(".mcool"):
@@ -609,7 +617,7 @@ def regulator(f1, f2, norm_method, CHRM_SIZE, outdir, bed1="", bed2="",
         x1, y1, v1 = read_pd(f1, distance_in_bp, bias1, chromosome, res)
    
     if f2.endswith(".hic"):                      
-        x2, y2, v2 = read_hic_file(f2, norm_method, CHRM_SIZE, distance_in_bp, chromosome,chromosome2, res)
+        x2, y2, v2 = read_hic_file(f2, norm_method, obs_type, CHRM_SIZE, distance_in_bp, chromosome,chromosome2, res)
     elif f2.endswith(".cool"):
         x2, y2, v2, res2 = read_cooler(f2, distance_in_bp, chromosome,chromosome2, norm_method)
         if res2 != res:
@@ -835,7 +843,7 @@ def main():
             else:
                 print("Error: Couldn't find the specified bias file2")
                 return
-        o = regulator(f1, f2, args.norm_method, CHRM_SIZE, args.outdir,
+        o = regulator(f1, f2, args.norm_method, args.obs_type, CHRM_SIZE, args.outdir,
 						  bed1=args.bed1,
                                                   bed2=args.bed2,
 						  res=res,
